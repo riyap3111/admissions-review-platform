@@ -1,0 +1,36 @@
+# Local-only for now (no cloud deployment scripting yet — see the plan).
+# api depends on postgres being healthy so migrations don't race a
+# not-yet-ready database on first boot.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=admissions
+      - POSTGRES_PASSWORD=admissions
+      - POSTGRES_DB=admissions
+    ports:
+      - "5433:5432"  # 5433 (not 5432) so this can run alongside the retention system's own Postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admissions"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "8010:8010"
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://admissions:admissions@postgres:5432/admissions
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - PORT=8010
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
